@@ -272,3 +272,94 @@ provider authentication, model request, service activation, dependency reinstall
 or push occurred. Execution and activation still require separate approval.
 This follow-up commit changes only the owned ledger; the staged artifact's source
 remains the exact accepted commit above.
+
+## 2026-10-31: test-only private discovery coverage
+
+Main authorized this separate test task after recording the accepted artifact.
+The artifact was not rebuilt or executed. Production source, manifests, lockfiles,
+and patches remain identical to accepted source
+`3f70e97e41ae20cb9c0a89b29b661de1008f5de9`. This task changes only
+`packages/cli/test/server-process-config.test.ts`, the new
+`packages/cli/test/server-process-discovery.test.ts`, and this ledger.
+
+### Direct scenarios and acquisition
+
+The focused checks cover 43 direct scenarios, including 19 new scenarios:
+
+- 24 flag cases: 8 distinct values across default, service, and stdio modes.
+  Empty and invalid values have separate named cases. These add 6 cases.
+- 8 explicit existing-option cases cover project and Claude defaults, both
+  project aliases, project precedence, both Claude aliases, their OR behavior,
+  and false values. These are new cases.
+- 5 new acquired discovery cases cover private global and empty HOME `.agents`
+  eligibility; system suppression with a positive fixture control; ancestor
+  suppression; Claude suppression; and late-created outside-profile sentinels.
+- 6 existing Server schema/forwarding cases were rerun without modification.
+
+The acquired tests call the production `ServerProcess.configOptions` adapter and
+actual Core `ConfigDiscovery.discover`. They do not copy source-selection logic.
+Acquisition is restricted to the Node filesystem, production FSUtil, production
+`Global.layerWith` with all-private paths, and a fixture `Location.Service`.
+`ConfigDiscovery` is an Effect, not a separate service layer; the tests execute
+that Effect in the acquired context. The live test harness also supplies its
+normal test console and scoped cleanup.
+
+A test-only FSUtil decorator passes the fixture root as the production `up`
+method's `stop` option. It rejects outside paths before `resolve` or `isDir`
+looks them up. This bounds ancestor enumeration without replacing Core's selector
+or the production filesystem methods. Positive controls still discover the
+synthetic legacy-home ancestors inside that boundary. This is a test boundary,
+not a runtime sandbox or proof that production ancestor walking is bounded.
+
+The launcher sets private matching HOME/OPENCODE_TEST_HOME, TMPDIR, XDG,
+configuration and database paths before imports. Each acquired case supplies
+private fixture paths and restores mutable environment values after use.
+Schema-validated initial configuration denies every tool permission and every
+current policy action, with no provider or plugin declarations. The tests do not
+acquire a policy engine or claim those rules were enforced.
+
+System controls use a custom synthetic system directory, never platform system
+configuration. Legacy-home controls also use synthetic directories. No real
+`/etc/opencode` contents or other user-home contents were inspected or modified.
+The late case creates synthetic system, ancestor JSON, `.opencode`, `.claude`,
+and `.agents` sentinels after initial discovery. Repeated discovery in the same
+acquired context still excludes them, while controls confirm their eligibility
+and presence when enabled. This tests re-enumeration, not watcher notifications.
+
+Private global app configuration stays eligible. Private HOME `.agents` also
+stays eligible and is explicitly checked empty. A future private profile must
+keep that directory empty; these flags do not disable all home discovery.
+
+### Checks, evidence, and limits
+
+The CLI direct run passed 37 scenarios; the Server direct run passed 6.
+Both focused files also passed 10 randomized repetitions with seed `1031`;
+Server forwarding passed 10 repetitions. Repetition is stability evidence, not
+additional scenario coverage. The final CLI package typecheck, focused oxlint,
+Prettier check, and Git whitespace check passed. No full package suites or broad
+application-acquiring checks were run under this restricted authorization.
+
+The first test attempt exposed a test import-resolution mistake: CLI does not
+have a direct Core package dependency. The tests now use explicit sibling source
+imports without changing dependencies. The first typecheck found branded-path
+expectation errors. The tests now use `AbsolutePath.make`, without unsafe casts.
+Private logs retain both failures and their successful corrected checks.
+
+Private evidence is under `opencode-build/discovery-tests/`, including the
+launcher, preflight record, exact commands, logs, and completion record.
+All 40 production `src` tree IDs match the accepted commit. Git also reports no
+difference in any tracked path outside the 3 owned tests/ledger paths.
+The complete comparisons, protected-file hash checks, and unchanged generated
+binary, staged artifact, manifest, and baseline hashes are recorded there.
+
+The Config loader, credential services, WellKnown, database, watcher, Project
+resolver, plugin supervisor, providers, models, and server do not acquire.
+Credential discovery and migration, configuration parsing/merge precedence,
+policy enforcement, skill loading, watcher reloads, default platform system/MDM
+paths, symlink behavior, Windows behavior, and runtime activation remain untested.
+A source-path test is not credential-discovery coverage.
+
+No executable, application, server, authentication flow, provider/model request,
+runtime profile, runtime database, service change, dependency installation,
+rebuild, or push occurred. Synthetic configuration fixtures are removed by scoped
+cleanup. Execution and activation remain unauthorized.
