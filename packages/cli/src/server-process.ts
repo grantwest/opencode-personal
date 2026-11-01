@@ -119,7 +119,19 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
             file: process.env.OPENCODE_MODELS_PATH,
             fetch: !truthy(process.env.OPENCODE_DISABLE_MODELS_FETCH),
           },
-          config: configOptions(options.mode),
+          config: {
+            directory: process.env.OPENCODE_CONFIG_DIR,
+            project: !truthy(
+              process.env.OPENCODE_CONFIG_PROJECT_DISABLE ?? process.env.OPENCODE_DISABLE_PROJECT_CONFIG,
+            ),
+            // .claude is only read for skills, so both flags gate the same roots.
+            claude: !(
+              truthy(process.env.OPENCODE_DISABLE_CLAUDE_CODE) ||
+              truthy(process.env.OPENCODE_DISABLE_CLAUDE_CODE_SKILLS)
+            ),
+            file: process.env.OPENCODE_CONFIG,
+            content: process.env.OPENCODE_CONFIG_CONTENT,
+          },
           windows: {
             gitbash: process.env.OPENCODE_GIT_BASH_PATH,
           },
@@ -203,21 +215,6 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
     }).pipe(Effect.annotateLogs({ role: "server" })),
   )
 })
-
-export function configOptions(mode: Mode) {
-  return {
-    directory: process.env.OPENCODE_CONFIG_DIR,
-    // Private foreground profiles can skip host policy without changing shared or stdio services.
-    system: mode === "default" && truthy(process.env.OPENCODE_CONFIG_SYSTEM_DISABLE) ? false : undefined,
-    project: !truthy(process.env.OPENCODE_CONFIG_PROJECT_DISABLE ?? process.env.OPENCODE_DISABLE_PROJECT_CONFIG),
-    // .claude is only read for skills, so both flags gate the same roots.
-    claude: !(
-      truthy(process.env.OPENCODE_DISABLE_CLAUDE_CODE) || truthy(process.env.OPENCODE_DISABLE_CLAUDE_CODE_SKILLS)
-    ),
-    file: process.env.OPENCODE_CONFIG,
-    content: process.env.OPENCODE_CONFIG_CONTENT,
-  }
-}
 
 function serviceURL(hostname: string, port: number) {
   return `http://${hostname.includes(":") ? `[${hostname}]` : hostname}:${port}`
