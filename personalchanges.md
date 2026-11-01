@@ -363,3 +363,96 @@ No executable, application, server, authentication flow, provider/model request,
 runtime profile, runtime database, service change, dependency installation,
 rebuild, or push occurred. Synthetic configuration fixtures are removed by scoped
 cleanup. Execution and activation remain unauthorized.
+
+## 2026-10-31: test-only bootstrap Git boundary proof
+
+Main authorized a focused source-test task, not a real bootstrap or runtime
+profile. The only new test is
+`packages/core/test/bootstrap-git-boundary.test.ts`. This follow-up commit changes
+only that test and this ledger. Production source remains the accepted
+`3f70e97e41ae20cb9c0a89b29b661de1008f5de9`; the accepted artifact is not rebuilt.
+
+### Direct scenarios
+
+3 direct scenarios passed:
+
+1. With only a fixture ancestor repository and its directory set as the Git
+   ceiling, native Git from the nested child refuses discovery. Removing the
+   ceiling is a positive native-Git control. The production `Project.root` and
+   `Git.repo.discover` selectors still find the ancestor with the ceiling set.
+   The custom filesystem walks do not honor Git's ceiling. Git discovery then
+   executes `rev-parse` from the ancestor itself, where Git accepts that root.
+2. A fresh nested bootstrap repository, initialized with an empty template and
+   no commits or remotes, becomes the nearest root. `Project.root`,
+   `Git.repo.discover`, and native Git return the nested root. Its worktree, Git
+   directory, and common directory remain inside the fixture bootstrap. The
+   canonical `.git` directory has no inherited hooks or object alternates.
+3. Moving only the nested fixture's `.git` metadata to another owned fixture path
+   exposes the ancestor again to both filesystem selectors, despite the ceiling.
+   Native Git from the child still refuses discovery. Therefore a future
+   bootstrap guard must fail closed if its positive boundary disappears; the
+   existence of a once-initialized nested repository is not a permanent guarantee.
+
+Every case hashes the complete fixture ancestor `.git` tree before and after its
+operations. The hash includes names, types, modes, and bytes, not access times.
+All before/after hashes matched. On this host the fixture metadata SHA-256 was:
+`550c7c0ad23d0e7d91ce943b9a43872b8ebea454b51d33f459e27f47ba0a41aa`.
+The private per-run evidence records each pair and the Git command count.
+The direct run used 16 Git built-in commands across the 3 cases: 4, 7, and 5.
+All repository initialization and metadata movement targeted disposable fixtures.
+
+### Services and coverage limits
+
+The tests call actual production selectors and production filesystem/process
+adapters. No selection loop is copied. The acquired graph contains exactly:
+
+- Node FileSystem, with fail-closed checks before selector filesystem lookups
+  outside the fixture. Its real methods still perform the lookups.
+- Production FSUtil and Node Path.
+- CrossSpawnSpawner / ChildProcessSpawner and production AppProcess.
+- Production Git.Service.
+
+The normal live test harness supplies its test console and scoped cleanup.
+Global and Location services are not needed and do not acquire. The filesystem
+checks are test safety checks, not an application sandbox or a bootstrap guard.
+
+`Project.resolve` remains untested. `Project.Service` acquires Database and Bus
+before exposing that function; even `persist:false` does not remove those
+acquisition dependencies. This task forbids that graph. The tests do not acquire
+a fake database, extract the private closure, or add a production test export.
+`Git.repo.discover` exercises the production FSUtil ancestor-walk method also
+used by Project resolution, but that is not a test of full `Project.resolve`.
+
+The full bound Location, project persistence/identity, OpenChamber ancestry guard,
+instruction loading, symlink/gitfile/linked-worktree rejection, Windows behavior,
+and runtime activation remain untested. No Config loader, credential service,
+plugin, provider, server, model, watcher, or database acquires.
+
+### Isolation and verification
+
+The launcher uses verified Bun 1.4.4 under `env -i` and nice priority 10. The Core
+`script/test.ts` runner supplies a fresh private HOME, matching test HOME, XDG,
+and TMPDIR before test imports. Each case supplies additional private fixture
+HOME/XDG/TMPDIR paths, clears inherited `GIT_*` variables, disables ambient system
+and global Git configuration, sets config-count 0, disables prompts/optional locks,
+and uses an explicitly empty Git template. Mutable environment values are
+restored after use. Scoped cleanup removes all fixture repositories and traces.
+
+The direct run passed 3 scenarios with 28 assertions. Each scenario also passed
+10 randomized repetitions with seed `1101`; these remain 3 scenarios, not 30.
+The focused Core package typecheck, single-file oxlint, Prettier, and Git
+whitespace checks passed. No heavy build or broad suite ran while the separate
+OpenChamber source check was active.
+
+Private evidence is in `opencode-build/bootstrap-git-tests/`: preflight,
+launcher, exact check commands/logs, metadata JSONL observations, JUnit output,
+source comparisons, and completion record. All 40 production `src` tree IDs match
+the accepted source. Protected lockfile/patch hashes, the generated CLI binary,
+the staged artifact and manifest, and the preserved baseline archive match their
+recorded SHA-256 values. Earlier owned tests are unchanged by this task.
+
+No real home repository, home Git metadata, or `/etc/opencode` contents were
+inspected or modified. No real bootstrap/profile directory, runtime database,
+application execution, artifact execution, rebuild, dependency installation,
+authentication, provider/model request, service change, or push occurred.
+Execution and activation remain unauthorized.
