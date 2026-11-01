@@ -172,3 +172,103 @@ application execution, provider authentication, model request, service activatio
 or push occurred. The original artifact remains at its original path and hash;
 it does not contain this patch. Preserve its original completion record as
 historical build evidence, including the identity blocker that was later resolved.
+
+## 2026-10-31: accepted rebuild and private artifact staging
+
+Independent reviewer `review` accepted source commit
+`3f70e97e41ae20cb9c0a89b29b661de1008f5de9` for rebuilding. No blocking defect
+was found. Main approved the rebuild, private staging, and this ledger update,
+not application execution or activation. Main clarified that the unchanged build
+can replace the generated web outputs as well as CLI dist. No production source,
+test, dependency, manifest, lockfile, or patch changed after review.
+
+### Preservation and build
+
+The original unexecuted `2.2.5+grant.1` artifact was copied exclusively to:
+
+```text
+/home/grant/.local/state/sysadmin-maintenance/openchamber-source-setup-2026-10-31/opencode-build/accepted-grant-2/baseline/bin/opencode
+```
+
+Its SHA-256 was verified before and after the rebuild:
+`d7f50ef9a273433f367336a050b56bcd4da91d05b8a435bcdbfbe25f5b0dc173`.
+Its size remains 271,423,664 bytes. The archive and its adjacent `manifest.json`
+were not overwritten. This archive replaces the earlier ledger's original-path
+preservation assumption: the generated CLI dist path now contains the new build.
+
+The accepted source was clean and exact before rebuilding. The build reused the
+verified Bun 1.4.4 binary, existing successful dependency installation, and the
+same private `env -i` environment from the baseline recipe. Only the build version
+changed to `2.2.5+grant.2`; channel stayed `local`, target stayed
+`linux-x64-baseline`, priority stayed nice 10, and `--skip-install` stayed enabled.
+The command from the repository root was:
+
+```sh
+# Use the baseline clean environment above, with these build variables:
+clean_run /usr/bin/env \
+  OPENCODE_VERSION=2.2.5+grant.2 \
+  OPENCODE_CHANNEL=local \
+  OPENCODE_TARGET=linux-x64-baseline \
+  /usr/bin/nice -n 10 \
+  /home/grant/.local/share/bun/1.4.4/bin/bun run \
+  --cwd packages/cli build --skip-install
+```
+
+Bun SHA-256 remained
+`10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235`.
+Node remained `24.22.2`. Exact tool paths, hashes, environment, command arguments,
+and resource snapshots are in the staged manifest and private build record.
+
+Available memory before the build was 4,971,532 KiB, above the 3 GiB minimum.
+The build passed with exit code 0 in 92.112 seconds. Maximum child resident size
+was 2,374,268 KiB, not an aggregate process-tree peak. The source stayed clean.
+Protected lockfile and patch hashes remained unchanged. The existing nonfatal
+CSS, dynamic-import, chunk-size, plugin timing, and Vite loader warnings remain.
+
+The build replaced only these approved generated outputs, plus ordinary build
+caches inside the checkout or private build-state directory:
+
+- `packages/app/dist`
+- `packages/cli/dist`
+- `packages/cli/.cache/bun-app-archive.bin`
+
+The generated paths and their ancestors were checked for symlink redirects before
+and after building. Existing generated directory contents contained no symlinks.
+No output path redirected to unrelated data. The baseline archive remained intact.
+
+### Staged result and remaining limits
+
+The verified executable is staged at:
+
+```text
+/home/grant/.local/share/openchamber-stack/builds/opencode/3f70e97e41ae20cb9c0a89b29b661de1008f5de9/bin/opencode
+```
+
+- Version: `2.2.5+grant.2`; channel: `local`; target: `linux-x64-baseline`.
+- Size: 271,423,664 bytes.
+- SHA-256:
+  `499182172c7082fc34aa0b2ce11012ad66bf28de2403653ac26e13c3fcfe417c`.
+- Manifest: `manifest.json` in the staged source-commit directory.
+- Manifest SHA-256:
+  `962673597ffc9e528a6d21513894c6c3b44626b9a2d6cbb0bdfabf7f3f036511`.
+
+The artifact is an independent verified copy, not a hard link. The staged
+directory was created exclusively. The binary and staged directories are mode
+0500; the manifest is mode 0400. Never rebuild or replace this source-commit path
+in place. Read-only permissions are not an immutable filesystem attribute or an
+operating-system sandbox.
+
+Private records are in `opencode-build/accepted-grant-2/`: `rebuild.py`,
+`build.json`, `build.log`, `stage.py`, `stage.json`, and the baseline archive and
+manifest. The original build records remain unchanged. The staged manifest records
+all approved generated output paths and the permitted cache locations.
+
+The reviewer identified nonblocking test gaps for later profile coverage:
+invalid/empty flag values and explicit assertions for existing project/Claude
+options. These do not authorize post-review source changes.
+
+Neither executable was run, including `--version`. No runtime profile or database,
+provider authentication, model request, service activation, dependency reinstall,
+or push occurred. Execution and activation still require separate approval.
+This follow-up commit changes only the owned ledger; the staged artifact's source
+remains the exact accepted commit above.
