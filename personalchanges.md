@@ -30,8 +30,7 @@ The working directory is the repository root. The private build directory is:
 build_root=/home/grant/.local/state/sysadmin-maintenance/openchamber-source-setup-2026-10-31/opencode-build
 ```
 
-The build directory and its HOME/cache/tmp/config/data/state children have mode
-0700. The launcher uses `umask 077`. Logs and JSON observations have mode 0600.
+The build directory and its HOME/cache/tmp/config/data/state children have mode 0700. The launcher uses `umask 077`. Logs and JSON observations have mode 0600.
 No launcher environment or credentials are inherited. The exact environment is:
 
 ```sh
@@ -118,3 +117,58 @@ Private evidence is retained under `opencode-build/`: `preflight.json`,
 `install.json`, `install.log`, `build.json`, `build.log`, `run-step.py`, and
 `completion.json`. These records contain the exact argument vectors and resource
 snapshots. Do not put private caches or logs in Git.
+
+## 2026-10-31: private foreground system-config suppression
+
+Main approved this corrected internal scope after independent design review.
+The baseline ledger was committed separately as
+`bca89abfdb0cd5d3a3976704ed1d6dc9c785f643` after Main supplied the verified
+repo-local Git identity. The original successful build was not repeated.
+
+- `packages/cli/src/server-process.ts` now maps
+  `OPENCODE_CONFIG_SYSTEM_DISABLE=1` (also `true`, case-insensitive) to
+  `config.system=false`, only for default foreground mode. Unset, `false`, and
+  `0` leave the option undefined. Service and stdio modes ignore this flag.
+  The production option adapter is exported inside the CLI module for focused
+  unit coverage; no executable entrypoint is run by those tests.
+- `packages/server/src/options.ts` accepts optional boolean `config.system`.
+  `packages/server/src/routes.ts` forwards it to Core's existing
+  `Config.configured` option. No Protocol, HttpApi, schema/client generation,
+  manifest, lockfile, or dependency patch was changed.
+- Global app configuration remains enabled. The launcher still requires matching
+  private HOME/OPENCODE_TEST_HOME, private TMPDIR before imports, explicit XDG,
+  configuration and database paths, and project/Claude-disable flags. These
+  controls are not an operating-system sandbox or approval for activation.
+
+Focused validation used Bun 1.4.4, `env -i`, private state under
+`opencode-build/config-system-tests/`, and nice priority 10:
+
+```sh
+# From packages/cli:
+bun test --timeout 30000 --only-failures --rerun-each 10 ./test/server-process-config.test.ts
+bun run typecheck
+
+# From packages/server:
+bun test --only-failures --rerun-each 10 ./test/config-system-options.test.ts
+bun run typecheck
+```
+
+The CLI matrix covers 6 flag values across all 3 modes: 180 passes, 0 failures
+with repetition. The Server matrix covers unset/false/true through the real
+options schema and both route constructors: 60 passes, 0 failures. A call-through
+spy captures the actual arguments passed to Core's `Config.configured`; the
+layer is not acquired. The tests do not discover configuration, start a server,
+open an application database, or execute the application.
+
+Both package typechecks passed. Focused oxlint on all 5 owned TypeScript files
+reported 0 warnings and 0 errors. The first formatting check found only the
+previous ledger's Markdown formatting; Prettier then formatted that owned file.
+No full package test suite or full-repository check was run, because those checks
+exceed the reviewed focused, non-server scope. Exact check arguments and private
+logs are retained with the test state.
+
+Main must review the committed patch before an accepted rebuild. No rebuild,
+application execution, provider authentication, model request, service activation,
+or push occurred. The original artifact remains at its original path and hash;
+it does not contain this patch. Preserve its original completion record as
+historical build evidence, including the identity blocker that was later resolved.
