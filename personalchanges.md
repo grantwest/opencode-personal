@@ -49,3 +49,9 @@ Built with Bun `1.4.4`, channel `local`, target `linux-x64-baseline`, version
 into `openchamber.service` and the `opencode-source`/`openchamber-source`
 wrappers (previous files kept as `*.bak-v2.2.5`). The v2.2.5 build is retained
 for rollback.
+
+## 2026-11-20: add update-running-opencode skill
+
+Added `.opencode/skills/update-running-opencode/SKILL.md`, a personal skill
+describing how to merge an upstream release, build it, repoint
+`openchamber.service`, and schedule a self wake-up across the restart.
