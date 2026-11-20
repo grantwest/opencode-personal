@@ -52,6 +52,6 @@ for rollback.
 
 ## 2026-11-20: add update-running-opencode skill
 
-Added `.opencode/skills/update-running-opencode/SKILL.md`, a personal skill
+Added `.agents/skills/update-running-opencode/SKILL.md` (moved from `.opencode/skills` for cross-agent compatibility), a personal skill
 describing how to merge an upstream release, build it, repoint
 `openchamber.service`, and schedule a self wake-up across the restart.
