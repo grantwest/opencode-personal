@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Builds this checkout's opencode and extensions into release folders and puts them live. See ../SKILL.md.
 #
-#   release.sh full                                  build opencode and extensions, check, switch both (restarts)
+#   release.sh build                                 build opencode and extensions, check them; prints the name
+#   release.sh use <name> [<extensions-name>]        switch to built releases (restarts)
 #   release.sh extensions                            build extensions, switch them live (no restart)
-#   release.sh use <opencode-name> <extensions-name> switch to existing releases (restarts)
 #   release.sh use-extensions <extensions-name>      switch to an existing extensions release (no restart)
 #   release.sh list                                  show what is live and what is stored
 set -euo pipefail
@@ -143,19 +143,19 @@ list() {
 }
 
 case "${1:-}" in
-  full)
+  build)
     name=$(release_name)
     build_opencode "$name"
     build_extensions "$name"
     check_opencode "$name"
-    use "$name" "$name"
+    echo "built $name; switch with: release.sh use $name"
     ;;
   extensions)
     name=$(release_name)
     build_extensions "$name"
     use_extensions "$name"
     ;;
-  use) use "${2:?opencode release name}" "${3:?extensions release name}" ;;
+  use) use "${2:?release name}" "${3:-$2}" ;;
   use-extensions) use_extensions "${2:?extensions release name}" ;;
   _switch) switch "$2" "$3" ;;
   list) list ;;
