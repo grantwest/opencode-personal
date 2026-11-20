@@ -38,3 +38,14 @@ It was not rebuilt, replaced, deleted, or approved for this unpatched deployment
 Generated web assets, caches, dependencies, and prior evidence remain unchanged.
 Neither binary was executed. No dependency installation, build, authentication,
 model request, or host service change occurred.
+
+## 2026-11-20: merge upstream v2.3.2
+
+Merged upstream tag `v2.3.2` (commit `c0ad18b402eb2827fc1ee71c171b1177b3fc02d1`). Version-bump conflicts were
+resolved to upstream, so all tracked files match `v2.3.2` except this ledger.
+Built with Bun `1.4.4`, channel `local`, target `linux-x64-baseline`, version
+`2.3.2+grant.1`; SHA-256 `e2743311d8828b364c205d960ef59768fa4a55b54839fcee366cae69d7154bbf`. Installed at
+`~/.local/share/openchamber-stack/builds/opencode/c0ad18b402eb2827fc1ee71c171b1177b3fc02d1/bin/opencode` and wired
+into `openchamber.service` and the `opencode-source`/`openchamber-source`
+wrappers (previous files kept as `*.bak-v2.2.5`). The v2.2.5 build is retained
+for rollback.
