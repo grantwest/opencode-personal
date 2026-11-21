@@ -16,6 +16,7 @@ EXTENSIONS=$RELEASES/extensions
 PLUGINS=$HOME/.config/opencode/plugins
 SERVICE=openchamber.service
 CHECK_PORT=46299
+SERVER_ENV=$HOME/.config/openchamber/opencode-server.env
 export PATH=$HOME/.local/share/bun/1.4.4/bin:$PATH
 
 die() {
@@ -146,8 +147,10 @@ live_url() {
 }
 
 api() {
-  [ -n "${OPENCODE_PASSWORD:-}${OPENCODE_SERVER_PASSWORD:-}" ] || die "OPENCODE_PASSWORD is not set; run this from an OpenChamber session"
-  exec "$BINARIES/current/bin/opencode" --server "$(live_url)" api "$@"
+  local password
+  password=$(sed -n 's/^OPENCODE_PASSWORD=//p' "$SERVER_ENV" 2>/dev/null) || true
+  [ -n "$password" ] || die "cannot read the password from $SERVER_ENV"
+  OPENCODE_PASSWORD=$password exec "$BINARIES/current/bin/opencode" --server "$(live_url)" api "$@"
 }
 
 list() {
