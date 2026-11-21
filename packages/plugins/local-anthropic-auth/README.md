@@ -34,7 +34,7 @@ Token exchange and refresh explicitly send `User-Agent: Bun/<runtime-version>` i
 
 The plugin writes structured INFO/WARN/ERROR logs for authorization setup, callback handling, pasted input parsing, token requests and responses, refresh completion, failures, and cooldowns. Logs include sanitized request/response bodies, headers, URLs, status codes, timing, expiry, and refresh-token rotation or retention. Authorization codes, OAuth state, PKCE verifiers, access/refresh tokens, authorization headers, API keys, cookies, and other recognized credentials are redacted. Raw pasted authorization input is never logged.
 
-Subscription requests receive Claude Code's OAuth identity headers and system block. API-key requests are not modified. Subscription models show zero cost while the plugin's OAuth credential is active.
+Subscription requests receive Claude Code's OAuth identity headers and system block, plus a Pi Pocket-style billing-classification block derived from the first user text. The billing block is prepended ahead of the identity and is idempotent across request hooks. Known OpenCode tool names are converted to Claude Code's canonical casing in definitions, previous tool calls, and native tool updates (`read` → `Read`, `todowrite` → `TodoWrite`); unknown names such as `question` remain unchanged. OpenCode dispatches renamed calls to the original native tools without response or SSE rewriting. API-key requests are not modified. Subscription models show zero cost while the plugin's OAuth credential is active.
 
 Set a different reported Claude Code version when necessary:
 
@@ -54,7 +54,7 @@ Only numeric `major.minor.patch` values are accepted; invalid or missing values 
 
 ## Scope
 
-The plugin ports the OAuth and request-identity behavior of `opencode-anthropic-auth` and pi-ai. It does not include Pi Pocket's optional billing-classification block, quota-waiting `LimitGate`, the old `mcp_` tool transformation, or Claude Agent SDK subprocesses.
+The plugin ports the OAuth and request-identity behavior of `opencode-anthropic-auth` and pi-ai. It includes Pi Pocket-style billing classification and pi-ai's fixed-list tool-name canonicalization for subscription inference requests. It does not include quota-waiting `LimitGate`, the old `mcp_` tool transformation, raw body/SSE rewriting, or Claude Agent SDK subprocesses.
 
 ## Remove
 

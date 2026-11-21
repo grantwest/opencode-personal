@@ -1,13 +1,41 @@
 import { Credential, Plugin, Provider } from "@opencode/plugin/effect"
 import type { Context } from "@opencode/plugin/effect/plugin"
-import type { SessionRequest } from "@opencode/plugin/effect/session"
+import type { SessionContext, SessionRequest } from "@opencode/plugin/effect/session"
 import { Effect, Stream } from "effect"
+import { createHash } from "node:crypto"
 import { BROWSER_METHOD_ID, browser, COPY_CODE_METHOD_ID, copyCode, INTEGRATION_ID } from "./oauth.js"
 
 export const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude."
 export const DEFAULT_CLAUDE_CODE_VERSION = "2.1.280"
 
 const REQUIRED_BETAS = ["claude-code-20250219", "oauth-2025-04-20"]
+const BILLING_HEADER = "x-anthropic-billing-header:"
+const BILLING_SALT = "59cf53e54c78"
+const BILLING_POSITIONS = [4, 7, 20]
+const CLAUDE_CODE_TOOLS = [
+  "Read",
+  "Write",
+  "Edit",
+  "Bash",
+  "Grep",
+  "Glob",
+  "AskUserQuestion",
+  "EnterPlanMode",
+  "ExitPlanMode",
+  "KillShell",
+  "NotebookEdit",
+  "Skill",
+  "Task",
+  "TaskOutput",
+  "TodoWrite",
+  "WebFetch",
+  "WebSearch",
+]
+const CLAUDE_CODE_TOOL_NAMES = new Map(CLAUDE_CODE_TOOLS.map((name) => [name.toLowerCase(), name]))
+
+type SubscriptionRequest = Pick<SessionRequest, "system" | "messages"> & Partial<Pick<SessionContext, "tools">>
+type SystemMessage = Extract<SessionRequest["messages"][number], { role: "system" }>
+type ToolEntry = NonNullable<SystemMessage["tools"]>["add"][number]
 
 export default Plugin.define({
   id: "opencode.anthropic-auth",
@@ -19,10 +47,10 @@ export default Plugin.define({
       editor.method.update(copyCode())
     })
 
-    const hook = (event: SessionRequest) =>
+    const hook = (event: SubscriptionRequest) =>
       Effect.gen(function* () {
         if (!(yield* activeSubscription(ctx))) return
-        prependIdentity(event.system)
+        shapeSubscriptionRequest(event, version)
       })
     yield* ctx.session.hook("context", hook, { providerID: Provider.ID.anthropic })
     yield* ctx.session.hook("compaction", hook, { providerID: Provider.ID.anthropic })
@@ -68,6 +96,73 @@ export function prependIdentity(system: SessionRequest["system"]) {
   if (existing === 0) return
   if (existing > 0) system.splice(existing, 1)
   system.unshift({ type: "text", text: CLAUDE_CODE_IDENTITY })
+}
+
+export function shapeSubscriptionRequest(request: SubscriptionRequest, version = DEFAULT_CLAUDE_CODE_VERSION) {
+  canonicalizeToolNames(request)
+  prependIdentity(request.system)
+  const existing = request.system.findIndex((part) => part.text.startsWith(BILLING_HEADER))
+  if (existing === 0) return
+  if (existing > 0) {
+    const billing = request.system.splice(existing, 1)[0]
+    if (billing) request.system.unshift(billing)
+    return
+  }
+  const text = firstUserText(request.messages)
+  if (!text) return
+  const sampled = BILLING_POSITIONS.map((index) => text[index] ?? "0").join("")
+  const suffix = createHash("sha256").update(`${BILLING_SALT}${sampled}${version}`).digest("hex").slice(0, 3)
+  const cch = createHash("sha256").update(text).digest("hex").slice(0, 5)
+  request.system.unshift({
+    type: "text",
+    text: `${BILLING_HEADER} cc_version=${version}.${suffix}; cc_entrypoint=sdk-cli; cch=${cch};`,
+  })
+}
+
+function firstUserText(messages: SessionRequest["messages"]) {
+  for (const message of messages) {
+    if (message.role !== "user") continue
+    return message.content.find((part) => part.type === "text")?.text ?? ""
+  }
+  return ""
+}
+
+function canonicalizeToolNames(request: Pick<SubscriptionRequest, "messages" | "tools">) {
+  if (request.tools) {
+    for (const [name, definition] of Object.entries(request.tools)) {
+      const canonical = claudeCodeToolName(name)
+      if (canonical === name || request.tools[canonical]) continue
+      request.tools[canonical] = definition
+      delete request.tools[name]
+    }
+  }
+  request.messages = request.messages.map((message) => {
+    if (message.role === "assistant" && message.content.some((part) => part.type === "tool-call")) {
+      return {
+        ...message,
+        content: message.content.map((part) =>
+          part.type === "tool-call" ? { ...part, name: claudeCodeToolName(part.name) } : part,
+        ),
+      }
+    }
+    if (message.role !== "system" || !message.tools) return message
+    return {
+      ...message,
+      tools: {
+        add: message.tools.add.map(canonicalizeToolEntry),
+        remove: message.tools.remove.map(claudeCodeToolName),
+      },
+    }
+  })
+}
+
+function canonicalizeToolEntry(entry: ToolEntry): ToolEntry {
+  if (entry.type === "namespace") return { ...entry, tools: entry.tools.map(canonicalizeToolEntry) }
+  return { ...entry, name: claudeCodeToolName(entry.name) }
+}
+
+function claudeCodeToolName(name: string) {
+  return CLAUDE_CODE_TOOL_NAMES.get(name.toLowerCase()) ?? name
 }
 
 export function applyOAuthHeaders(
