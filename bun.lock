@@ -591,6 +591,21 @@
         "@opencode/plugin": "^2.0.27 || ^0.0.0-dev",
       },
     },
+    "packages/plugins/local-anthropic-auth": {
+      "name": "@opencode/plugin-anthropic-auth",
+      "version": "2.3.2",
+      "dependencies": {
+        "effect": "4.1.0",
+      },
+      "devDependencies": {
+        "@tsconfig/bun": "1.0.9",
+        "@types/bun": "1.4.3",
+        "@typescript/native": "npm:typescript@7.1.0-beta",
+      },
+      "peerDependencies": {
+        "@opencode/plugin": "^2.0.27 || ^0.0.0-dev",
+      },
+    },
     "packages/protocol": {
       "name": "@opencode/protocol",
       "version": "2.3.2",
@@ -1826,6 +1841,8 @@
     "@opencode/patchmark": ["@opencode/patchmark@workspace:packages/patchmark"],
 
     "@opencode/plugin": ["@opencode/plugin@workspace:packages/plugin"],
+
+    "@opencode/plugin-anthropic-auth": ["@opencode/plugin-anthropic-auth@workspace:packages/plugins/local-anthropic-auth"],
 
     "@opencode/plugin-browser": ["@opencode/plugin-browser@workspace:packages/plugin-browser"],
 

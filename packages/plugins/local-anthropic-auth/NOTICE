@@ -1,0 +1,6 @@
+This plugin is derived from opencode-anthropic-auth 0.0.13 (Copyright (c) 2025 SST)
+and incorporates protocol behavior from @earendil-works/pi-ai 1.4.0
+(Copyright Mario Zechner and contributors), both distributed under the MIT License.
+
+No Claude CLI credentials are read or reused. Authentication creates a separate
+OpenCode-owned credential through the plugin's own OAuth flow.
