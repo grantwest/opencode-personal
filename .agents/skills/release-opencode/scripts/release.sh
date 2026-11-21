@@ -6,6 +6,7 @@
 #   release.sh extensions                            build extensions, switch them live (no restart)
 #   release.sh use-extensions <extensions-name>      switch to an existing extensions release (no restart)
 #   release.sh list                                  show what is live and what is stored
+#   release.sh api <opencode api args...>            call the live OpenChamber server's API (never starts a service)
 set -euo pipefail
 
 REPO=$(git -C "$(dirname "$(realpath "$0")")" rev-parse --show-toplevel)
@@ -133,6 +134,22 @@ switch() {
   use_extensions "$2"
 }
 
+# OpenChamber's opencode is a plain `serve` child of the service, not the CLI's registered background service, so a
+# bare `opencode api` would start a second server. --server pins the CLI to the live one and never starts anything.
+live_url() {
+  local main pid port
+  main=$(systemctl --user show -p MainPID --value "$SERVICE")
+  [ "${main:-0}" != 0 ] || die "$SERVICE is not running"
+  pid=$(pgrep -P "$main" -f 'opencode serve' | head -1) || die "no opencode serve under $SERVICE"
+  port=$(tr '\0' ' ' </proc/"$pid"/cmdline | grep -oP -- '--port \K[0-9]+') || die "cannot read the port of PID $pid"
+  echo "http://127.0.0.1:$port"
+}
+
+api() {
+  [ -n "${OPENCODE_PASSWORD:-}${OPENCODE_SERVER_PASSWORD:-}" ] || die "OPENCODE_PASSWORD is not set; run this from an OpenChamber session"
+  exec "$BINARIES/current/bin/opencode" --server "$(live_url)" api "$@"
+}
+
 list() {
   echo "opencode current: $(readlink "$BINARIES/current" 2>/dev/null || echo none)"
   echo "extensions live:  $(live_extensions || true)"
@@ -159,5 +176,6 @@ case "${1:-}" in
   use-extensions) use_extensions "${2:?extensions release name}" ;;
   _switch) switch "$2" "$3" ;;
   list) list ;;
-  *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+  api) shift; api "$@" ;;
+  *) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
 esac

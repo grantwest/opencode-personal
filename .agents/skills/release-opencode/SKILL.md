@@ -38,6 +38,11 @@ All from `.agents/skills/release-opencode/scripts/release.sh`:
 | `release.sh use <name> [<extensions-name>]` | Switches opencode and extensions to built releases; the extensions name defaults to `<name>` | Yes |
 | `release.sh use-extensions <extensions-name>` | Switches to an existing extensions release (rollback) | No |
 | `release.sh list` | Shows what is live and what is stored | No |
+| `release.sh api <args>` | `opencode api <args>` against the live OpenChamber server, e.g. `release.sh api get /api/plugin` | No |
+
+## Checking the live server
+
+Check the running opencode only with `release.sh api …`. Never run plain `opencode api`, `opencode service …` or any other server-backed `opencode` command without `--server`. OpenChamber's opencode is a plain `serve` child of `openchamber.service`, not the CLI's registered background service, so `opencode service status` says `stopped`, and the CLI then starts a second, separate server (`serve --service`) and talks to that. Its answers describe the wrong server, and it keeps running afterwards (this happened on 2026-11-20). `release.sh api` passes `--server http://127.0.0.1:<live port>`, which never starts anything, and uses the `OPENCODE_PASSWORD` that OpenChamber gives every session shell. Right after a switch, plugins load asynchronously, so an empty list may only mean they haven't loaded yet: retry for a few seconds before concluding anything.
 
 - **Checks** (`build`, before anything stops): `bin/opencode --version`, then `opencode serve` on `127.0.0.1:46299` until `GET /` returns 200. Together under a second. A failure stops the release with production untouched.
 - **Restart switch**: runs in a transient unit (`systemd-run --user`, unit `opencode-release-<time>`), because stopping `openchamber.service` kills every process in its cgroup, including your shell. It stops the service, points `opencode/current` at the new binary, switches the extensions folder, and starts the service (also on failure). Logs: `journalctl --user -u opencode-release-<time>`.
