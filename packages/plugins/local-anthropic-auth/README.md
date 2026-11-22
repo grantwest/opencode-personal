@@ -36,21 +36,7 @@ The plugin writes structured INFO/WARN/ERROR logs for authorization setup, callb
 
 Subscription requests receive Claude Code's OAuth identity headers and system block, plus a Pi Pocket-style billing-classification block derived from the first user text. The billing block is prepended ahead of the identity and is idempotent across request hooks. Known OpenCode tool names are converted to Claude Code's canonical casing in definitions, previous tool calls, and native tool updates (`read` → `Read`, `todowrite` → `TodoWrite`); unknown names such as `question` remain unchanged. OpenCode dispatches renamed calls to the original native tools without response or SSE rewriting. API-key requests are not modified. Subscription models show zero cost while the plugin's OAuth credential is active.
 
-Set a different reported Claude Code version when necessary:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugins": [
-    {
-      "package": "./packages/plugins/local-anthropic-auth",
-      "options": { "claudeCodeVersion": "2.1.280" },
-    },
-  ],
-}
-```
-
-Only numeric `major.minor.patch` values are accepted; invalid or missing values use `2.1.280`.
+Subscription requests report a Claude Code version in both the `user-agent` header and the billing block's `cc_version`. The plugin seeds it at `2.1.322`. When Anthropic rejects a model request once with `claude_code_version_too_old`, the plugin adopts the version that rejection requires, stores it for later processes, and retries the request once with the adopted version. The stored value only ever moves up and is ignored if it is below the current seed, so a stale or corrupt value cannot lower the reported version. The seed is only a starting point; no configuration is required.
 
 ## Scope
 

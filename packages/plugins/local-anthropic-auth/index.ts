@@ -1,12 +1,45 @@
 import { Credential, Plugin, Provider } from "@opencode/plugin/effect"
 import type { Context } from "@opencode/plugin/effect/plugin"
 import type { SessionContext, SessionRequest } from "@opencode/plugin/effect/session"
-import { Effect, Stream } from "effect"
+import { Effect, Option, Schema, Stream } from "effect"
 import { createHash } from "node:crypto"
 import { BROWSER_METHOD_ID, browser, COPY_CODE_METHOD_ID, copyCode, INTEGRATION_ID } from "./oauth.js"
 
 export const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude."
-export const DEFAULT_CLAUDE_CODE_VERSION = "2.1.280"
+
+/**
+ * Seed Claude Code version reported to Anthropic, via both the user-agent header and the billing header's
+ * `cc_version`. Anthropic gates newer models on this value, so a validation request that reports too low a
+ * version is rejected once with `claude_code_version_too_old`; that rejection names the required version, which
+ * this plugin adopts and persists. The seed is only the value used before anything has been learned.
+ */
+export const DEFAULT_CLAUDE_CODE_VERSION = "2.1.322"
+
+const VERSION_STORAGE_KEY = "claude-code-version"
+const VERSION_ERROR_CODE = "claude_code_version_too_old"
+const MAX_VERSION_BODY = 16 * 1024
+const VERSION_REJECTION_PATTERN =
+  /^Claude Code ([0-9.]+) does not support this model; version ([0-9.]+) or newer is required\.$/
+
+// Anthropic's rejection envelope, tolerant of the extra fields it may add. `error_code` is the authoritative signal;
+// the message only supplies the two versions.
+const VersionRejection = Schema.StructWithRest(
+  Schema.Struct({
+    type: Schema.Literal("error"),
+    error: Schema.StructWithRest(
+      Schema.Struct({
+        type: Schema.Literal("invalid_request_error"),
+        message: Schema.String,
+        details: Schema.StructWithRest(Schema.Struct({ error_code: Schema.Literal(VERSION_ERROR_CODE) }), [
+          Schema.Record(Schema.String, Schema.Unknown),
+        ]),
+      }),
+      [Schema.Record(Schema.String, Schema.Unknown)],
+    ),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+)
+const decodeVersionRejection = Schema.decodeUnknownOption(Schema.fromJsonString(VersionRejection))
 
 const REQUIRED_BETAS = ["claude-code-20250219", "oauth-2025-04-20"]
 const BILLING_HEADER = "x-anthropic-billing-header:"
@@ -40,7 +73,7 @@ type ToolEntry = NonNullable<SystemMessage["tools"]>["add"][number]
 export default Plugin.define({
   id: "opencode.anthropic-auth",
   effect: Effect.fn("AnthropicAuth.Plugin")(function* (ctx) {
-    const version = claudeCodeVersion(ctx.options)
+    let version = versionSeed(yield* ctx.storage.get(VERSION_STORAGE_KEY))
 
     yield* ctx.integration.transform((editor) => {
       editor.method.update(browser())
@@ -63,6 +96,32 @@ export default Plugin.define({
         const credential = yield* activeSubscription(ctx)
         if (!credential) return
         applyOAuthHeaders(event.headers, version, credential.access)
+      }),
+      { providerID: Provider.ID.anthropic },
+    )
+
+    // Anthropic rejects a model request once when the reported Claude Code version predates the model's minimum,
+    // naming the version it requires. Adopt it, persist it for future processes, and force one retry. The runner's
+    // retry rebuilds the request through the shaping hooks above, so the retry reports the adopted version. A 400
+    // is retryable only because this hook flips the decision; the `required > rejected` guard means a request sent
+    // at an already-adopted version cannot force another retry, so this cannot loop.
+    yield* ctx.session.hook(
+      "retry",
+      Effect.fn("AnthropicAuth.versionGate")(function* (event) {
+        if (event.error.type !== "provider.invalid-request") return
+        if (!(yield* activeSubscription(ctx))) return
+        const rejection = versionRejection(event.error.response?.body)
+        if (!rejection) return
+        if (compareVersions(rejection.required, rejection.rejected) <= 0) return
+        if (compareVersions(rejection.required, version) > 0) {
+          version = rejection.required
+          yield* ctx.storage.set(VERSION_STORAGE_KEY, version)
+          yield* Effect.logInfo("anthropic claude code version adopted", {
+            rejected: rejection.rejected,
+            required: rejection.required,
+          })
+        }
+        event.decision = { retry: true, delay: 0 }
       }),
       { providerID: Provider.ID.anthropic },
     )
@@ -210,7 +269,32 @@ function isSubscription(credential: Credential.Value | undefined): credential is
   )
 }
 
-function claudeCodeVersion(options: Context["options"]) {
-  const version = options.claudeCodeVersion
-  return typeof version === "string" && /^\d+\.\d+\.\d+$/.test(version) ? version : DEFAULT_CLAUDE_CODE_VERSION
+/** The higher of the seed and a previously persisted version; a corrupt or missing value falls back to the seed. */
+export function versionSeed(stored: unknown) {
+  if (!isVersion(stored) || compareVersions(stored, DEFAULT_CLAUDE_CODE_VERSION) <= 0)
+    return DEFAULT_CLAUDE_CODE_VERSION
+  return stored
+}
+
+/** Reads the two version numbers from Anthropic's minimum-version rejection, or nothing for any other body. */
+export function versionRejection(body: string | undefined) {
+  if (!body || body.length > MAX_VERSION_BODY) return
+  const decoded = Option.getOrUndefined(decodeVersionRejection(body))
+  if (!decoded) return
+  const match = VERSION_REJECTION_PATTERN.exec(decoded.error.message)
+  if (!match) return
+  const rejected = match[1]
+  const required = match[2]
+  if (!isVersion(rejected) || !isVersion(required)) return
+  return { rejected, required }
+}
+
+function isVersion(value: unknown): value is string {
+  return typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value)
+}
+
+function compareVersions(a: string, b: string) {
+  const [aMajor = 0, aMinor = 0, aPatch = 0] = a.split(".").map(Number)
+  const [bMajor = 0, bMinor = 0, bPatch = 0] = b.split(".").map(Number)
+  return aMajor - bMajor || aMinor - bMinor || aPatch - bPatch
 }

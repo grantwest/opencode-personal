@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { SessionContext, SessionRequest } from "@opencode/plugin/effect/session"
-import { applyOAuthHeaders, CLAUDE_CODE_IDENTITY, prependIdentity, shapeSubscriptionRequest } from "./index.js"
+import { applyOAuthHeaders, CLAUDE_CODE_IDENTITY, prependIdentity, shapeSubscriptionRequest, versionRejection, versionSeed } from "./index.js"
 
 describe("applyOAuthHeaders", () => {
   test("merges existing beta flags case-insensitively and sets Claude Code identity", () => {
@@ -76,14 +76,14 @@ describe("shapeSubscriptionRequest", () => {
 
     shapeSubscriptionRequest(request)
     expect(request.system.map((part) => part.text)).toEqual([
-      "x-anthropic-billing-header: cc_version=2.1.280.86f; cc_entrypoint=sdk-cli; cch=315f5;",
+      "x-anthropic-billing-header: cc_version=2.1.322.a66; cc_entrypoint=sdk-cli; cch=315f5;",
       CLAUDE_CODE_IDENTITY,
       "OpenCode instructions",
     ])
 
     shapeSubscriptionRequest(request)
     expect(request.system.map((part) => part.text)).toEqual([
-      "x-anthropic-billing-header: cc_version=2.1.280.86f; cc_entrypoint=sdk-cli; cch=315f5;",
+      "x-anthropic-billing-header: cc_version=2.1.322.a66; cc_entrypoint=sdk-cli; cch=315f5;",
       CLAUDE_CODE_IDENTITY,
       "OpenCode instructions",
     ])
@@ -191,5 +191,58 @@ describe("shapeSubscriptionRequest", () => {
         remove: ["TodoWrite", "question"],
       },
     })
+  })
+})
+
+describe("versionSeed", () => {
+  test("uses the seed when nothing is stored or the stored value is unusable", () => {
+    expect(versionSeed(undefined)).toBe("2.1.322")
+    expect(versionSeed("not-a-version")).toBe("2.1.322")
+    expect(versionSeed("2.1.280")).toBe("2.1.322")
+  })
+
+  test("keeps a stored version newer than the seed", () => {
+    expect(versionSeed("2.2.0")).toBe("2.2.0")
+  })
+})
+
+describe("versionRejection", () => {
+  const rejection = (overrides: { message?: string; errorCode?: string } = {}) =>
+    JSON.stringify({
+      type: "error",
+      error: {
+        type: "invalid_request_error",
+        message:
+          overrides.message ?? "Claude Code 2.1.322 does not support this model; version 2.5.0 or newer is required.",
+        details: { error_code: overrides.errorCode ?? "claude_code_version_too_old" },
+      },
+    })
+
+  test("reads both versions from Anthropic's minimum-version rejection", () => {
+    expect(versionRejection(rejection())).toEqual({ rejected: "2.1.322", required: "2.5.0" })
+  })
+
+  test("tolerates extra fields Anthropic adds to the envelope", () => {
+    const extra = JSON.stringify({
+      type: "error",
+      error: {
+        type: "invalid_request_error",
+        message: "Claude Code 2.1.322 does not support this model; version 2.5.0 or newer is required.",
+        details: { error_code: "claude_code_version_too_old", hint: "upgrade" },
+        request_id: "req_123",
+      },
+      extra: true,
+    })
+    expect(versionRejection(extra)).toEqual({ rejected: "2.1.322", required: "2.5.0" })
+  })
+
+  test("ignores a different error code, a non-JSON body, and an absent body", () => {
+    expect(versionRejection(rejection({ errorCode: "something_else" }))).toBeUndefined()
+    expect(versionRejection("not json")).toBeUndefined()
+    expect(versionRejection(undefined)).toBeUndefined()
+  })
+
+  test("ignores a message that does not name both versions", () => {
+    expect(versionRejection(rejection({ message: "You're out of extra usage." }))).toBeUndefined()
   })
 })
